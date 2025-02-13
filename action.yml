@@ -1,0 +1,167 @@
+#
+# MIT License
+#
+# Copyright (c) 2025 Václav Kubernát
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+name: "Rust pycobertura"
+description: "Generate pycobertura reports for Rust projects"
+inputs:
+  project_name:
+    description: "Name of the project used for filenames / in text"
+    required: true
+  commit_name:
+    description: "Commit hash used for filenames"
+    default: ${{github.event.pull_request.head.sha || github.sha}}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Rust
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        target: x86_64-unknown-linux-gnu
+        toolchain: nightly
+        override: true
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@cargo-llvm-cov
+
+    - name: Install pycobertura
+      uses: insightsengineering/pip-action@v2
+      with:
+        packages: pycobertura==3.3.2
+
+    - name: Checkout PR HEAD
+      uses: actions/checkout@v4
+      with:
+        path: pr-head
+
+    - name: Checkout master
+      uses: actions/checkout@v4
+      with:
+        path: master
+        ref: ${{github.event.pull_request.base.ref || github.event.before}}
+
+    - name: Generate code coverage
+      run: |
+        for CODE_DIR in master pr-head; do
+          (
+            cd "${{github.workspace}}/$CODE_DIR"
+            cargo llvm-cov --all-features --cobertura --output-path '${{inputs.project_name}}-cobertura.xml'
+          )
+        done
+      shell: bash
+
+    - name: Generate pycobertura text and HTML report
+      run: |
+        FAIL=no
+        set -x
+        for FORMAT in markdown html; do
+          pycobertura \
+            show \
+            --format "$FORMAT" \
+            --source '${{github.workspace}}/pr-head' \
+            --output "${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.$FORMAT" \
+            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || FAIL=yes
+
+          pycobertura \
+            diff \
+            --format "$FORMAT" \
+            --no-color \
+            --source1 '${{github.workspace}}/master' \
+            --source2 '${{github.workspace}}/pr-head' \
+            --output "${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.$FORMAT" \
+            '${{github.workspace}}/master/${{inputs.project_name}}-cobertura.xml' \
+            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || FAIL=yes
+        done
+
+        cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.markdown'
+        echo
+        cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.markdown'
+
+        echo "FAIL=$FAIL" >> "$GITHUB_ENV"
+      shell: bash
+
+    - name: Upload HTML reports
+      id: html-reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{inputs.project_name}}-cov-html-${{inputs.commit_name}}
+        path: ${{github.workspace}}/${{inputs.project_name}}-pycobertura-*-${{inputs.commit_name}}.html
+
+    - name: Generate sticky comment contents
+      run: |
+        # shellcheck disable=SC2016
+        {
+          echo '## Code coverage report for ${{inputs.commit_name}}'
+
+          echo '#### Coverage difference'
+          if [[ ${{ env.FAIL }} = yes ]]; then
+            echo Code coverage worsened.
+          else
+            echo All new changes were covered.
+          fi
+          cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.markdown'
+
+          echo
+          echo
+
+          echo '#### Overall coverage'
+          echo '<details>'
+          echo '<summary>Click to expand</summary>'
+          echo '<span>'
+          echo
+          cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.markdown'
+          echo
+          echo '</span>'
+          echo '</details>'
+
+          echo
+          echo '#### HTML reports'
+          echo 'You can use _GitHub CLI_ to download HTML coverage reports and open them automatically using this command:'
+          echo '```bash'
+          echo '(cd "$(mktemp -d)" && gh run -R ${{github.repository}} download -n ${{inputs.project_name}}-cov-html-${{inputs.commit_name}} && ls -1 | xargs -n1 xdg-open)'
+          echo '```'
+          echo
+          echo 'You can download the HTML reports manually [here](${{steps.html-reports.outputs.artifact-url}})'.
+          echo
+        } > sticky-comment.md
+      shell: bash
+
+    - name: Add Coverage PR Comment
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        path: sticky-comment.md
+    - name: Fail if coverage is worse
+      run: |
+        if [[ ${{ env.FAIL }} = yes ]]; then
+          false
+        fi
+      shell: bash
+
+branding:
+  icon: "archive"
+  color: "gray-dark"
