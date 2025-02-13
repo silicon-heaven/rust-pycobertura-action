@@ -30,8 +30,8 @@ inputs:
   commit_name:
     description: "Commit hash used for filenames"
     default: ${{github.event.pull_request.head.sha || github.sha}}
-  features_arguments:
-    description: "Specify custom features for the build"
+  cargo_test_arguments:
+    description: "Specify custom arguments for cargo test"
     default: "--all-features"
 
 runs:
@@ -73,7 +73,7 @@ runs:
         for CODE_DIR in master pr-head; do
           (
             cd "${{github.workspace}}/$CODE_DIR"
-            cargo llvm-cov ${{inputs.features_arguments}} --cobertura --output-path '${{inputs.project_name}}-cobertura.xml'
+            cargo llvm-cov ${{inputs.cargo_test_arguments}} --cobertura --output-path '${{inputs.project_name}}-cobertura.xml'
           )
         done
       shell: bash
