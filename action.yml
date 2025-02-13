@@ -73,7 +73,7 @@ runs:
         for CODE_DIR in master pr-head; do
           (
             cd "${{github.workspace}}/$CODE_DIR"
-            cargo llvm-cov ${{inputs.cargo_test_arguments}} --cobertura --output-path '${{inputs.project_name}}-cobertura.xml'
+            cargo llvm-cov --cobertura --output-path '${{inputs.project_name}}-cobertura.xml' ${{inputs.cargo_test_arguments}}
           )
         done
       shell: bash
