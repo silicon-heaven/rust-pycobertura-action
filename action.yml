@@ -80,7 +80,7 @@ runs:
 
     - name: Generate pycobertura text and HTML report
       run: |
-        FAIL=no
+        PYCOBERTURA_STATUS=no
         set -x
         for FORMAT in markdown html; do
           pycobertura \
@@ -88,7 +88,7 @@ runs:
             --format "$FORMAT" \
             --source '${{github.workspace}}/pr-head' \
             --output "${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.$FORMAT" \
-            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || FAIL=yes
+            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || PYCOBERTURA_STATUS=yes
 
           pycobertura \
             diff \
@@ -98,14 +98,14 @@ runs:
             --source2 '${{github.workspace}}/pr-head' \
             --output "${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.$FORMAT" \
             '${{github.workspace}}/master/${{inputs.project_name}}-cobertura.xml' \
-            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || FAIL=yes
+            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || PYCOBERTURA_STATUS=yes
         done
 
         cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.markdown'
         echo
         cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.markdown'
 
-        echo "FAIL=$FAIL" >> "$GITHUB_ENV"
+        echo "PYCOBERTURA_STATUS=$PYCOBERTURA_STATUS" >> "$GITHUB_ENV"
       shell: bash
 
     - name: Upload HTML reports
@@ -122,7 +122,7 @@ runs:
           echo '## Code coverage report for ${{inputs.commit_name}}'
 
           echo '#### Coverage difference'
-          if [[ ${{ env.FAIL }} = yes ]]; then
+          if [[ ${{ env.PYCOBERTURA_STATUS }} = yes ]]; then
             echo Code coverage worsened.
           else
             echo All new changes were covered.
@@ -158,9 +158,9 @@ runs:
       uses: marocchino/sticky-pull-request-comment@v2
       with:
         path: sticky-comment.md
-    - name: Fail if coverage is worse
+    - name: PYCOBERTURA_STATUS if coverage is worse
       run: |
-        if [[ ${{ env.FAIL }} = yes ]]; then
+        if [[ ${{ env.PYCOBERTURA_STATUS }} = yes ]]; then
           false
         fi
       shell: bash
