@@ -136,16 +136,16 @@ runs:
           echo '#### Coverage difference'
           case ${{env.PYCOBERTURA_STATUS}} in
             ${{env.PYCOBERTURA_SUCCESS}})
-              echo All new changes were covered.
+              echo ✅ All new changes were covered.
               ;;
             ${{env.PYCOBERTURA_COVERAGE_WORSENED}})
-              echo Code coverage worsened.
+              echo ❌ Code coverage worsened.
               ;;
             ${{env.PYCOBERTURA_NOT_ALL_CHANGES_COVERED}})
-              echo There are new lines without coverage.
+              echo ⚠️ There are new lines with missing coverage.
               ;;
           esac
-            
+
           cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.markdown'
 
           echo
