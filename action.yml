@@ -78,9 +78,17 @@ runs:
         done
       shell: bash
 
+    - name: Set pycobertura exit codes
+      run: |
+        echo "PYCOBERTURA_SUCCESS=0" >> "$GITHUB_ENV"
+        echo "PYCOBERTURA_EXCEPTION=1" >> "$GITHUB_ENV"
+        echo "PYCOBERTURA_COVERAGE_WORSENED=2" >> "$GITHUB_ENV"
+        echo "PYCOBERTURA_NOT_ALL_CHANGES_COVERED=3" >> "$GITHUB_ENV"
+      shell: bash
+
     - name: Generate pycobertura text and HTML report
       run: |
-        FAIL=no
+        PYCOBERTURA_STATUS=0
         set -x
         for FORMAT in markdown html; do
           pycobertura \
@@ -88,7 +96,7 @@ runs:
             --format "$FORMAT" \
             --source '${{github.workspace}}/pr-head' \
             --output "${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.$FORMAT" \
-            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || FAIL=yes
+            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || PYCOBERTURA_STATUS=$?
 
           pycobertura \
             diff \
@@ -98,14 +106,18 @@ runs:
             --source2 '${{github.workspace}}/pr-head' \
             --output "${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.$FORMAT" \
             '${{github.workspace}}/master/${{inputs.project_name}}-cobertura.xml' \
-            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || FAIL=yes
+            '${{github.workspace}}/pr-head/${{inputs.project_name}}-cobertura.xml' || PYCOBERTURA_STATUS=$?
         done
+
+        if [[ "$PYCOBERTURA_STATUS" = ${{env.PYCOBERTURA_EXCEPTION}} ]]; then
+          false
+        fi
 
         cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.markdown'
         echo
         cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.markdown'
 
-        echo "FAIL=$FAIL" >> "$GITHUB_ENV"
+        echo "PYCOBERTURA_STATUS=$PYCOBERTURA_STATUS" >> "$GITHUB_ENV"
       shell: bash
 
     - name: Upload HTML reports
@@ -122,11 +134,18 @@ runs:
           echo '## Code coverage report for ${{inputs.commit_name}}'
 
           echo '#### Coverage difference'
-          if [[ ${{ env.FAIL }} = yes ]]; then
-            echo Code coverage worsened.
-          else
-            echo All new changes were covered.
-          fi
+          case ${{env.PYCOBERTURA_STATUS}} in
+            ${{env.PYCOBERTURA_SUCCESS}})
+              echo ✅ All new changes were covered.
+              ;;
+            ${{env.PYCOBERTURA_COVERAGE_WORSENED}})
+              echo ❌ Code coverage worsened.
+              ;;
+            ${{env.PYCOBERTURA_NOT_ALL_CHANGES_COVERED}})
+              echo ⚠️ There are new lines with missing coverage.
+              ;;
+          esac
+
           cat '${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.markdown'
 
           echo
@@ -160,7 +179,7 @@ runs:
         path: sticky-comment.md
     - name: Fail if coverage is worse
       run: |
-        if [[ ${{ env.FAIL }} = yes ]]; then
+        if [[ ${{env.PYCOBERTURA_STATUS}} != ${{env.PYCOBERTURA_SUCCESS}} ]]; then
           false
         fi
       shell: bash
