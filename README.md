@@ -18,8 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Generate coverage
-        uses: syyyr/rust-pycobertura-action@v1.2.0
+        uses: syyyr/rust-pycobertura-action@v2.0.0
         with:
           project_name: <my_project_name>
           cargo_test_arguments: "" # Optional, the default is "--all-features"
+          fail_if_worse: "" # Optional, the default is "false"
 ```
