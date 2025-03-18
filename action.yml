@@ -33,6 +33,9 @@ inputs:
   cargo_test_arguments:
     description: "Specify custom arguments for cargo test"
     default: "--all-features"
+  fail_if_worse:
+    description: "Whether to fail pycobertura says so"
+    default: "false"
 
 runs:
   using: "composite"
@@ -178,8 +181,17 @@ runs:
       with:
         path: sticky-comment.md
     - name: Fail if coverage is worse
+      if: inputs.fail_if_worse != 'false'
       run: |
         if [[ ${{env.PYCOBERTURA_STATUS}} != ${{env.PYCOBERTURA_SUCCESS}} ]]; then
+          false
+        fi
+      shell: bash
+
+    - name: Fail on pycobertura exception
+      if: inputs.fail_if_worse == 'false'
+      run: |
+        if [[ ${{env.PYCOBERTURA_STATUS}} = ${{env.PYCOBERTURA_EXCEPTION}} ]]; then
           false
         fi
       shell: bash
