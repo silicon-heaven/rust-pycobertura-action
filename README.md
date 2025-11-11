@@ -1,6 +1,6 @@
 # Rust pycobertura
 This action and sets up pycobertura and runs test on current and previous versions of the repo. Then generates HTML
-reports and sticky comments.
+reports and sticky comments. The raw coverage output is saved for both the current and previous versions via GitHub.
 
 ## Usage
 ```yaml
