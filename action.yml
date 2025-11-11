@@ -69,33 +69,27 @@ runs:
 
     - name: Checkout PR HEAD
       uses: actions/checkout@v4
+      id: checkout-pr-head
       with:
         path: pr-head
 
     - name: Checkout base-ref
       uses: actions/checkout@v4
+      id: checkout-base-ref
       with:
         path: base-ref
         ref: ${{github.event.pull_request.base.ref || github.event.before}}
 
-    - name: Figure out commit hashes for cache
-      id: commit-hashes
-      run: |
-        for CODE_REF in base-ref pr-head; do
-          echo "${CODE_REF}=$(git -C "$CODE_REF" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-        done
-      shell: bash
-
     - name: Setup code coverage cache for PR HEAD
       uses: actions/cache@v4
       with:
-        key: rust-pycobertura-${{inputs.cache_key}}-${{steps.commit-hashes.outputs.pr-head}}
+        key: rust-pycobertura-${{inputs.cache_key}}-${{steps.checkout-pr-head.outputs.commit}}
         path: pr-head/*-cobertura.xml
 
     - name: Setup code coverage cache for base-ref
       uses: actions/cache@v4
       with:
-        key: rust-pycobertura-${{inputs.cache_key}}-${{steps.commit-hashes.outputs.base-ref}}
+        key: rust-pycobertura-${{inputs.cache_key}}-${{steps.checkout-base-ref.outputs.commit}}
         path: base-ref/*-cobertura.xml
 
     - name: Generate code coverage
