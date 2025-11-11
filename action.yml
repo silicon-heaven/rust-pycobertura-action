@@ -39,6 +39,10 @@ inputs:
   rust_toolchain:
     description: "Which toolchain to choose (stable/nightly)"
     default: "stable"
+  cache_key:
+    description: "An additional key for the coverage cache"
+    required: false
+    default: ${{ github.workflow }}-${{ github.job }}
 
 runs:
   using: "composite"
@@ -74,12 +78,37 @@ runs:
         path: base-ref
         ref: ${{github.event.pull_request.base.ref || github.event.before}}
 
+    - name: Figure out commit hashes for cache
+      id: commit-hashes
+      run: |
+        for CODE_REF in base-ref pr-head; do
+          echo "${CODE_REF}=$(git -C "$CODE_REF" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        done
+      shell: bash
+
+    - name: Setup code coverage cache for PR HEAD
+      uses: actions/cache@v4
+      with:
+        key: rust-pycobertura-${{inputs.cache_key}}-${{steps.commit-hashes.outputs.pr-head}}
+        path: pr-head/*-cobertura.xml
+
+    - name: Setup code coverage cache for base-ref
+      uses: actions/cache@v4
+      with:
+        key: rust-pycobertura-${{inputs.cache_key}}-${{steps.commit-hashes.outputs.base-ref}}
+        path: base-ref/*-cobertura.xml
+
     - name: Generate code coverage
       run: |
-        for CODE_DIR in base-ref pr-head; do
+        for CODE_DIR in pr-head base-ref; do
           (
             cd "${{github.workspace}}/$CODE_DIR"
-            cargo llvm-cov --cobertura --output-path '${{inputs.project_name}}-cobertura.xml' ${{inputs.cargo_test_arguments}}
+            COVERAGE_FILENAME='${{inputs.project_name}}-cobertura.xml'
+            if [[ -f "$COVERAGE_FILENAME" ]]; then
+              echo Coverage for "$CODE_DIR" exists, skipping.
+              exit 0
+            fi
+            cargo llvm-cov --cobertura --output-path "$COVERAGE_FILENAME" ${{inputs.cargo_test_arguments}}
           )
         done
       shell: bash
