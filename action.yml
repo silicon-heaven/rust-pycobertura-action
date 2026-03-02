@@ -150,11 +150,18 @@ runs:
       shell: bash
 
     - name: Upload HTML reports
-      id: html-reports
-      uses: actions/upload-artifact@v4
+      id: html-report-show
+      uses: actions/upload-artifact@v7
       with:
-        name: ${{inputs.project_name}}-cov-html-${{inputs.commit_name}}
-        path: ${{github.workspace}}/${{inputs.project_name}}-pycobertura-*-${{inputs.commit_name}}.html
+        archive: false
+        path: ${{github.workspace}}/${{inputs.project_name}}-pycobertura-show-${{inputs.commit_name}}.html
+
+    - name: Upload HTML reports
+      id: html-report-diff
+      uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        path: ${{github.workspace}}/${{inputs.project_name}}-pycobertura-diff-${{inputs.commit_name}}.html
 
     - name: Generate sticky comment contents
       run: |
@@ -192,13 +199,8 @@ runs:
 
           echo
           echo '#### HTML reports'
-          echo 'You can use _GitHub CLI_ to download HTML coverage reports and open them automatically using this command:'
-          echo '```bash'
-          echo '(cd "$(mktemp -d)" && gh run -R ${{github.repository}} download -n ${{inputs.project_name}}-cov-html-${{inputs.commit_name}} && ls -1 | xargs -n1 xdg-open)'
-          echo '```'
-          echo
-          echo 'You can download the HTML reports manually [here](${{steps.html-reports.outputs.artifact-url}})'.
-          echo
+          echo '- [show](${{steps.html-report-show.outputs.artifact-url}})'
+          echo '- [diff](${{steps.html-report-diff.outputs.artifact-url}})'
         } > sticky-comment.md
       shell: bash
 
